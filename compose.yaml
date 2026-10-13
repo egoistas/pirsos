@@ -1,0 +1,73 @@
+name: ${COMPOSE_PROJECT_NAME:-military-rag}
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: rag
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes: ["redis_data:/data"]
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    networks: [internal]
+
+  api:
+    build: ./app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://rag:${POSTGRES_PASSWORD}@db:5432/rag
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - documents:/storage/documents
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [internal]
+
+  worker:
+    build: ./app
+    restart: unless-stopped
+    command: ["rq", "worker", "ingestion", "--url", "redis://redis:6379/0"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://rag:${POSTGRES_PASSWORD}@db:5432/rag
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - documents:/storage/documents
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [internal]
+
+networks:
+  internal:
+    driver: bridge
+volumes:
+  postgres_data:
+  redis_data:
+  documents:

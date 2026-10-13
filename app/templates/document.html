@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% block content %}
+<p><a href="/admin">← Βιβλιοθήκη</a></p><h1>{{ doc.doc_key }} · Έκδοση {{ doc.version_number }}</h1>
+<div class="card"><strong>{{ doc.filename }}</strong><p class="muted">SHA-256: <code>{{ doc.sha256 }}</code><br>Κατάσταση: <strong class="{{ doc.status }}">{{ doc.status }}</strong> · Δημοσιευμένος: {{ 'Ναι' if doc.is_active else 'Όχι' }} · Σελίδες: {{ doc.pages or '—' }}<br>Progress: {{ doc.progress_done }}/{{ doc.progress_total }} · Μοντέλο: {{ doc.embed_model }}</p>
+<p><a href="/files/{{ doc.id }}" target="_blank">Άνοιγμα πρωτοτύπου PDF</a></p>
+{% if doc.error_message %}<div class="alert"><strong>Σφάλμα:</strong> {{ doc.error_message }}</div>{% endif %}
+</div>
+<div class="card"><h2>Πρώτα 250 chunks ({{ doc.chunk_count }} συνολικά)</h2>
+{% for chunk in chunks %}<details class="source"><summary>#{{ chunk.ordinal }} | PDF σελίδες {{ chunk.page_start }}–{{ chunk.page_end }} | {{ chunk.breadcrumb }}</summary><p class="text">{{ chunk.body }}</p></details>{% else %}<p class="muted">Δεν έχουν δημιουργηθεί chunks ακόμη.</p>{% endfor %}
+</div><div class="card"><h2>Ιστορικό ενεργειών</h2><table><tr><th>Χρόνος</th><th>Ποιος</th><th>Ενέργεια</th><th>Σημείωση</th></tr>{% for e in history %}<tr><td>{{ e.happened_at }}</td><td>{{ e.actor }}</td><td>{{ e.event }}</td><td>{{ e.detail }}</td></tr>{% endfor %}</table></div>
+{% endblock %}

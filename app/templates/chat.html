@@ -1,0 +1,6 @@
+{% extends 'base.html' %}{% block content %}
+<h1>Βοηθός Κανονισμών</h1><p class="muted">{{ org }} · Αναζήτηση μόνο σε εγκεκριμένες/ενεργοποιημένες εκδόσεις · Χρήστης: {{ username }}</p>
+<div class="card"><form action="/ask" method="post"><label for="q">Ερώτηση στα ελληνικά</label><textarea id="q" name="question" maxlength="1500" required placeholder="π.χ. Πού τοποθετούνται οι υπογραφές σε σχέδιο εγγράφου;">{{ question }}</textarea><p><button type="submit">🔍 Αναζήτηση & απάντηση</button></p></form></div>
+{% if answer is not none %}<div class="card"><h2>Απάντηση</h2><div class="text">{{ answer }}</div></div>
+<div class="card"><h2>Πηγές</h2>{% for s in sources %}<div class="source"><strong>[ΠΗΓΗ {{ loop.index }}] {{ s.doc_key }}</strong> — PDF σελ. {{ s.page }}–{{ s.page_end }}<br><small>{{ s.breadcrumb }}</small><p class="text">{{ s.text }}</p><a href="/files/{{ s.document_id }}#page={{ s.page }}" target="_blank">Προβολή πρωτοτύπου</a></div>{% else %}<p class="muted">Δεν βρέθηκαν ανακτημένα αποσπάσματα.</p>{% endfor %}</div>{% endif %}
+{% endblock %}

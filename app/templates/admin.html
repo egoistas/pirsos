@@ -1,0 +1,16 @@
+{% extends 'base.html' %}{% block content %}
+<h1>Διαχείριση κανονισμών</h1><p class="muted">{{ org }} · Διαχειριστής: {{ username }} · Embedding model: <code>{{ embed_model }}</code></p>
+{% if request.query_params.get('duplicate') %}<div class="alert">⚠️ Το συγκεκριμένο PDF υπάρχει ήδη (ίδιο SHA-256). Δεν δημιουργήσαμε δεύτερα embeddings.</div>{% endif %}
+{% if request.query_params.get('uploaded') %}<div class="ok">✅ Το PDF καταχωρίστηκε. Ο worker θα κάνει indexing στο παρασκήνιο. Ανανεώστε τη σελίδα για πρόοδο.</div>{% endif %}
+<div class="grid"><div class="card"><div class="muted">Εκδόσεις εγγράφων</div><div class="value">{{ totals.documents }}</div></div><div class="card"><div class="muted">Embeddings / chunks</div><div class="value">{{ totals.chunks }}</div></div><div class="card"><div class="muted">Σε εκκρεμότητα</div><div class="value">{{ totals.queued }}</div></div></div>
+<div class="card"><h2>Ανέβασμα νέου κανονισμού</h2><p class="muted">Ο κωδικός ομαδοποιεί διαφορετικές εκδόσεις του ίδιου κανονισμού. Το PDF αποθηκεύεται εσωτερικά και γίνεται έλεγχος διπλοτύπου.</p>
+<form action="/admin/upload" method="post" enctype="multipart/form-data"><div class="grid"><label>Κωδικός κανονισμού (π.χ. ΔΚ-0-3)<br><input type="text" name="code" placeholder="ΔΚ-0-3" maxlength="120"></label><label>Επιλογή PDF<br><input type="file" name="file" accept="application/pdf,.pdf" required></label></div><p><button type="submit">⬆ Ανέβασμα & έναρξη indexing</button></p></form></div>
+<div class="card"><h2>Βιβλιοθήκη</h2><p class="muted">Το «Έτοιμο» σημαίνει ότι δημιουργήθηκαν τα embeddings. Δεν σημαίνει ότι ο κανονισμός εγκρίθηκε ή εξακολουθεί να ισχύει. Η ενεργοποίηση είναι ξεχωριστή ενέργεια.</p>
+<table><thead><tr><th>Κωδικός / Έκδοση</th><th>Αρχείο</th><th>Indexing</th><th>Δημοσίευση</th><th>Ενέργειες</th></tr></thead><tbody>
+{% for d in documents %}<tr><td><strong>{{ d.doc_key }}</strong><br><small>Version {{ d.version_number }}</small></td><td><a href="/admin/document/{{ d.id }}">{{ d.filename }}</a><br><small>SHA: {{ d.sha256[:12] }}…</small></td>
+<td><span class="{{ d.status }}">{{ d.status }}</span><br><small>{{ d.progress_done }} / {{ d.progress_total }} passages</small></td><td>{% if d.is_active %}<span class="active">✅ Ενεργός</span>{% else %}<span class="muted">Ανενεργός</span>{% endif %}</td>
+<td>{% if d.status=='ready' and not d.is_active %}<form class="inline" action="/admin/document/{{ d.id }}/activate" method="post"><button type="submit">Ενεργοποίηση</button></form>{% endif %}
+{% if d.is_active %}<form class="inline" action="/admin/document/{{ d.id }}/deactivate" method="post"><button class="warn" type="submit">Απενεργοποίηση</button></form>{% endif %}
+{% if d.status=='failed' %}<form class="inline" action="/admin/document/{{ d.id }}/retry" method="post"><button class="subtle">Επανάληψη</button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="5">Δεν υπάρχουν κανονισμοί. Ξεκίνα από το upload.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}
