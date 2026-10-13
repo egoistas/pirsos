@@ -70,7 +70,7 @@ def process_document(document_id: str):
                                  (EMBED_MODEL,content_hash,vector))
                     conn.execute("""INSERT INTO chunks
                         (document_id,ordinal,group_key,breadcrumb,section,paragraph,subsection,page_start,page_end,kind,body,search_text,content_sha256,embed_model,embedding)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::vector)""",
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::vector)""",
                         (document_id,ordinal,unit['group'],unit['breadcrumb'],unit['section'],unit['paragraph'],unit['alpha'],
                          unit['page'],unit['page_end'],unit['kind'],unit['text'],searchable,content_hash,EMBED_MODEL,vector))
                 conn.execute('UPDATE documents SET progress_done=%s WHERE id=%s',

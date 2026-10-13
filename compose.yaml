@@ -1,4 +1,6 @@
-name: ${COMPOSE_PROJECT_NAME:-military-rag}
+
+name: military-rag-pilot
+
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -20,7 +22,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    volumes: ["redis_data:/data"]
+    volumes:
+      - redis_data:/data
     command: ["redis-server", "--appendonly", "yes"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -33,7 +36,7 @@ services:
     build: ./app
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${APP_PORT:-8080}:8080"
+      - "127.0.0.1:18080:8080"
     env_file: .env
     environment:
       DATABASE_URL: postgresql://rag:${POSTGRES_PASSWORD}@db:5432/rag
@@ -41,8 +44,10 @@ services:
     volumes:
       - documents:/storage/documents
     depends_on:
-      db: {condition: service_healthy}
-      redis: {condition: service_healthy}
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks: [internal]
@@ -58,8 +63,10 @@ services:
     volumes:
       - documents:/storage/documents
     depends_on:
-      db: {condition: service_healthy}
-      redis: {condition: service_healthy}
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks: [internal]
@@ -67,6 +74,7 @@ services:
 networks:
   internal:
     driver: bridge
+
 volumes:
   postgres_data:
   redis_data:
