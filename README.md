@@ -44,9 +44,9 @@
    docker compose ps
    ```
 
-6. **Διαχειριστικό περιβάλλον (Admin UI):** [http://localhost:8080/admin](http://localhost:8080/admin) — Σύνδεση με `ADMIN_USER` / `ADMIN_PASSWORD` από το `.env`.
+6. **Διαχειριστικό περιβάλλον (Admin UI):** [http://localhost:18080/admin](http://localhost:18080/admin) — Σύνδεση με `ADMIN_USER` / `ADMIN_PASSWORD` από το `.env`.
 
-7. **Περιβάλλον συνομιλίας χρηστών (Chat):** [http://localhost:8080/](http://localhost:8080/) — Σύνδεση με `VIEWER_USER` / `VIEWER_PASSWORD`.
+7. **Περιβάλλον συνομιλίας χρηστών (Chat):** [http://localhost:18080/](http://localhost:18080/) — Σύνδεση με `VIEWER_USER` / `VIEWER_PASSWORD`.
 
 8. Ανέβασε ένα **επιτρεπόμενο, μη διαβαθμισμένο PDF**. Συμπλήρωσε έναν σταθερό κωδικό εγγράφου (π.χ. `DK-0-3`) και πραγματοποίησε το upload. Έπειτα ανανέωσε το Admin για να παρακολουθήσεις τον ασύγχρονο worker. Το έγγραφο πρέπει να αποκτήσει κατάσταση `ready` προτού ο διαχειριστής επιλέξει χειροκίνητα **Ενεργοποίηση (Activate)**. Το RAG αναζητά πληροφορίες μόνο στην ενεργή έκδοση.
 
