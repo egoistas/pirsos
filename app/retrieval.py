@@ -1,4 +1,5 @@
 import json
+from context_expansion import expand_group
 from db import connect
 from inference import EMBED_MODEL, embed, answer
 
@@ -39,20 +40,25 @@ def retrieve(question, top_k=5):
             chosen.append(row)
             seen.add(group)
             if len(chosen)>=top_k: break
-        # Group context reconstruction is deliberately capped for 4096 ctx.
+        # Expand after group deduplication so lists retain their child provisions.
+        groups={}
+        for row in chosen:
+            groups[row['id']]=conn.execute('''SELECT body,ordinal,page_start,page_end,subsection,breadcrumb
+                FROM chunks WHERE document_id=%s AND group_key=%s
+                ORDER BY ordinal''',(row['document_id'],row['group_key'])).fetchall()
+        remaining=7500-sum(len(row['body']) for row in chosen)
+        expansions={}
+        # Heading hits need their children most. Keep output order/ranking unchanged.
+        for row in sorted(chosen,key=lambda r:bool(r.get('subsection'))):
+            budget=max(len(row['body']),min(4500,len(row['body'])+remaining))
+            expanded=expand_group(row,groups[row['id']],max_chars=budget)
+            remaining-=len(expanded['text'])-len(row['body'])
+            expansions[row['id']]=expanded
         result=[]
         for row in chosen:
-            parent=conn.execute('''SELECT body,ordinal,page_start,page_end
-                FROM chunks WHERE document_id=%s AND group_key=%s
-                ORDER BY ordinal LIMIT 8''',(row['document_id'],row['group_key'])).fetchall()
-            text=row['body']
-            opener=next((p for p in parent if p['ordinal']<row['ordinal'] and p['body']!=text),None)
-            if opener:
-                text=(opener['body'][:450]+'\n'+text)[:1200]
             result.append({'document_id':str(row['document_id']),'filename':row['filename'],
-                           'doc_key':row['doc_key'],'page':row['page_start'],
-                           'page_end':row['page_end'],'breadcrumb':row['breadcrumb'],
-                           'text':text,'score':round(scores[row['id']],5)})
+                           'doc_key':row['doc_key'],**expansions[row['id']],
+                           'score':round(scores[row['id']],5)})
         return result
 
 
