@@ -17,6 +17,7 @@ from redis import Redis
 from rq import Queue
 from db import connect, audit
 from retrieval import run_rag, retrieve
+from prompt_context import pack_sources
 from inference import EMBED_MODEL, stream_answer
 
 STORAGE=Path('/storage/documents')
@@ -78,14 +79,11 @@ def ask_stream(question: str = Form(...), username=Depends(require_viewer)):
     def generate():
         try:
             yield event('status', message='Αναζήτηση πηγών…')
-            sources = retrieve(question)
+            sources, context = pack_sources(question, retrieve(question))
             yield event('sources', sources=sources)
             if not sources:
                 yield event('token', text='Δεν υπάρχουν ενεργοποιημένοι, έτοιμοι κανονισμοί με το τρέχον embedding model.')
             else:
-                context = '\n\n'.join(
-                    f"[ΠΗΓΗ {i}] {s['doc_key']} | PDF σελ. {s['page']}–{s['page_end']} | {s['breadcrumb']}\n{s['text']}"
-                    for i, s in enumerate(sources, 1))
                 yield event('status', message='Σύνταξη απάντησης…')
                 diagnostics = {}
                 for token in stream_answer(question, context, on_complete=diagnostics.update):

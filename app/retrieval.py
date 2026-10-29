@@ -1,5 +1,6 @@
 import json
 from context_expansion import expand_group
+from prompt_context import pack_sources
 from db import connect
 from inference import EMBED_MODEL, embed, answer
 
@@ -63,11 +64,8 @@ def retrieve(question, top_k=5):
 
 
 def run_rag(question):
-    sources=retrieve(question)
+    sources,context=pack_sources(question,retrieve(question))
     if not sources:
         return 'Δεν υπάρχουν ενεργοποιημένοι, έτοιμοι κανονισμοί με το τρέχον embedding model.',[]
-    passages=[]
-    for i,source in enumerate(sources,1):
-        passages.append(f"[ΠΗΓΗ {i}] {source['doc_key']} | PDF σελ. {source['page']}–{source['page_end']} | {source['breadcrumb']}\n{source['text']}")
-    result=answer(question,'\n\n'.join(passages))
+    result=answer(question,context)
     return result,sources

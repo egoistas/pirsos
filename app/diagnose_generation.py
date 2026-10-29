@@ -5,18 +5,14 @@ Run inside the API container. No requests are sent outside configured Ollama.
 import argparse
 import json
 from db import connect
-from inference import EMBED_MODEL, stream_answer
+from inference import EMBED_MODEL, stream_answer, SIMPLE_PROMPT
+from prompt_context import pack_sources
 from retrieval import retrieve
-
-
-def format_context(sources):
-    return '\n\n'.join(
-        f"[ΠΗΓΗ {i}] {s['doc_key']} | PDF σελ. {s['page']}–{s['page_end']} | {s['breadcrumb']}\n{s['text']}"
-        for i, s in enumerate(sources, 1))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--compare-prompts', action='store_true')
     parser.add_argument('--question', required=True)
     parser.add_argument('--doc-key', required=True)
     parser.add_argument('--section', required=True)
@@ -39,11 +35,17 @@ def main():
         if not sources:
             print(json.dumps({'mode': label, 'error': 'No retrieved sources'}, ensure_ascii=False))
             continue
-        context = format_context(sources)
-        diagnostics = {}
-        answer = ''.join(stream_answer(args.question, context, on_complete=diagnostics.update))
-        print(json.dumps({'mode': label, 'answer': answer, 'diagnostics': diagnostics,
-                          'sources': sources}, ensure_ascii=False), flush=True)
+        sources, context = pack_sources(args.question, sources)
+        prompts = [('current', None)]
+        if args.compare_prompts:
+            prompts.append(('simple', SIMPLE_PROMPT))
+        for prompt_name, prompt in prompts:
+            diagnostics = {}
+            answer = ''.join(stream_answer(args.question, context, on_complete=diagnostics.update,
+                                          system_prompt=prompt))
+            print(json.dumps({'mode': label, 'prompt': prompt_name, 'answer': answer,
+                              'diagnostics': diagnostics, 'sources': sources},
+                             ensure_ascii=False), flush=True)
 
 
 if __name__ == '__main__':
