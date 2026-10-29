@@ -1,125 +1,210 @@
-# Military RAG v0.5 — Πιλοτική έκδοση με Docker, βάση δεδομένων και διαχειριστικό περιβάλλον
+# Πυρσός — Τοπικός βοηθός αναζήτησης εγγράφων
 
-**Πεδίο εφαρμογής:** Λειτουργική πιλοτική έκδοση για **εγκεκριμένο, μη διαβαθμισμένο υλικό** σε **απομονωμένο περιβάλλον δοκιμών**. **ΔΕΝ** αποτελεί θωρακισμένη εγκατάσταση στρατιωτικού συστήματος παραγωγής και **ΔΕΝ** έχει εγκριθεί για επεξεργασία διαβαθμισμένων εγγράφων.
+Ο **Πυρσός (Pirsos)** είναι εφαρμογή ερωταπαντήσεων πάνω σε PDF. Αναζητά σχετικά αποσπάσματα, παράγει απάντηση στα ελληνικά και εμφανίζει πηγές με σύνδεσμο στη σελίδα του πρωτοτύπου.
 
-## Συστατικά του συστήματος
+Λειτουργεί με Docker Compose και τοπικά μοντέλα μέσω Ollama. Μετά την αρχική λήψη των μοντέλων, των Docker images και των εξαρτήσεων, μπορεί να χρησιμοποιηθεί χωρίς σύνδεση στο Internet.
 
-- `db`: PostgreSQL 16 + pgvector + pg_trgm (με μόνιμο Docker volume).
-- `redis`: Ουρά εργασιών εισαγωγής και επεξεργασίας εγγράφων (με μόνιμο volume).
-- `worker`: Επεξεργαστής PDF με PyMuPDF που λαμβάνει υπόψη τη δομή του εγγράφου (προσαρμογή από τη v0.4), προσωρινή αποθήκευση βάσει SHA-256 και παραγωγή embeddings μέσω τοπικού Ollama endpoint.
-- `api`: Εφαρμογή FastAPI με γραφικό περιβάλλον διαχείρισης εγγράφων και ελληνόγλωσσο RAG Chat.
-- `Ollama`: Εκτελείται ξεχωριστά στον υπολογιστή-host ή σε ειδικό, **εγκεκριμένο** κόμβο AI inference. **Δεν** αποτελεί υπηρεσία του Docker Compose σε αυτή την πιλοτική έκδοση, ώστε η ρύθμιση της GPU να παραμένει φορητή.
+## Τι περιλαμβάνει
 
-Κάθε οργανισμός θα πρέπει να διαθέτει **δική του εγκατάσταση Docker Compose και δική του βάση δεδομένων/volumes**. Δεν πρέπει να χρησιμοποιείται μία κοινή βάση χωρίς διαχωρισμό μεταξύ οργανισμών. Η πιλοτική έκδοση δεν υποστηρίζει διαχείριση ταυτοτήτων και πρόσβασης πολλαπλών οργανισμών (multi-tenant IAM), ούτε λεπτομερή έλεγχο πρόσβασης (ACL) ή διαβαθμίσεων.
+- Chat με σταδιακή εμφάνιση απάντησης, πεδίο εισαγωγής στο κάτω μέρος και αναδιπλούμενες πηγές.
+- Διαχειριστικό περιβάλλον για ανάρτηση PDF, παρακολούθηση επεξεργασίας και ενεργοποίηση εκδόσεων.
+- PostgreSQL 16 με pgvector και pg_trgm για διανυσματική και λεξική αναζήτηση.
+- Redis και worker για ασύγχρονη επεξεργασία PDF.
+- PyMuPDF για εξαγωγή κειμένου με στοιχεία δομής και σελίδων.
+- Ollama στον υπολογιστή υποδοχής για embeddings και παραγωγή απαντήσεων.
 
-## Γρήγορη εγκατάσταση — Windows PC με Docker Desktop, κατά προτίμηση RTX 3070, και Ollama
+Η απάντηση αποτελεί βοήθημα ανάγνωσης. Ελέγχετε τις παραπομπές στο πρωτότυπο, ιδίως πριν βασιστείτε σε προϋποθέσεις, εξαιρέσεις ή αριθμητικά στοιχεία.
 
-1. Εγκατάστησε το Docker Desktop με WSL2 και συμβατούς NVIDIA drivers. Διατήρησε το Ollama σε λειτουργία στον υπολογιστή Windows.
+## Εγκατάσταση σε Windows με Docker Desktop και Ollama
 
-2. Κατέβασε τα απαραίτητα μοντέλα από το PowerShell:
+Οι παρακάτω εντολές εκτελούνται σε **PowerShell**. Απαιτούνται Git, Docker Desktop σε λειτουργία με Linux containers και Ollama εγκατεστημένο στα Windows. Το Ollama εκτελείται ξεχωριστά από το Compose.
 
-   ```powershell
-   ollama pull bge-m3
-   ollama pull gemma3:4b
-   ollama list
-   ```
+### 1. Λήψη του project και των μοντέλων
 
-   **Σημαντικό:** Χρησιμοποιείται **νέο embedding model**, το `bge-m3` (1024 διαστάσεων). Τα υπάρχοντα `.npy` embeddings από τη v0.4 **δεν είναι συμβατά** και θα δημιουργηθούν ξανά από το PDF. Τα μοντέλα κατεβαίνουν αρχικά μέσω Internet· έλεγξε προηγουμένως την πολιτική εγκατάστασης λογισμικού και την προέλευσή τους.
+```powershell
+git clone https://github.com/egoistas/pirsos.git
+Set-Location pirsos
+ollama pull bge-m3
+ollama pull qwen3:4b-instruct
+ollama list
+```
 
-3. Αποσυμπίεσε το project εκτός OneDrive, π.χ. στο `C:\MilitaryRAG-v05\`.
+Χρησιμοποιήστε ακριβώς το tag **`qwen3:4b-instruct`** για την παρακάτω ρύθμιση. Το `qwen3:4b` είναι διαφορετική επιλογή και δεν αποτελεί ισοδύναμη αντικατάσταση στη συγκεκριμένη δοκιμή.
 
-4. Στο PowerShell, μέσα στον κεντρικό φάκελο του project:
+### 2. Δημιουργία ρυθμίσεων
 
-   ```powershell
-   Copy-Item .env.example .env
-   notepad .env
-   ```
+Μόνο στην πρώτη εγκατάσταση:
 
-   Αντικατάστησε **όλες** τις τιμές `CHANGE_ME_...` με μεγάλους, διαφορετικούς κωδικούς πρόσβασης. Άλλαξε και την τιμή του `ORG_LABEL`. Η προεπιλεγμένη τιμή `OLLAMA_URL=http://host.docker.internal:11434` λειτουργεί σε πολλές εγκαταστάσεις Docker Desktop στα Windows όταν το Ollama εκτελείται στον host. Αν χρειαστεί, επαλήθευσε τη σύνδεση μέσα από το container.
+```powershell
+Copy-Item .env.example .env
+notepad .env
+```
 
-5. Εκκίνησε το σύστημα:
+Αν υπάρχει ήδη `.env`, ανοίξτε το χωρίς να το αντικαταστήσετε. Ορίστε διαφορετικούς, ισχυρούς κωδικούς στις μεταβλητές `POSTGRES_PASSWORD`, `ADMIN_PASSWORD` και `VIEWER_PASSWORD`.
 
-   ```powershell
-   docker compose up --build -d
-   docker compose ps
-   ```
+Ενημερώστε τις αντίστοιχες γραμμές, χωρίς διπλές καταχωρίσεις:
 
-6. **Διαχειριστικό περιβάλλον (Admin UI):** [http://localhost:18080/admin](http://localhost:18080/admin) — Σύνδεση με `ADMIN_USER` / `ADMIN_PASSWORD` από το `.env`.
+```dotenv
+OLLAMA_URL=http://host.docker.internal:11434
+EMBED_MODEL=bge-m3
+EMBED_DIMS=1024
+CHAT_MODEL=qwen3:4b-instruct
+CHAT_NUM_CTX=8192
+CHAT_NUM_PREDICT=1000
+PROMPT_MARGIN=256
+PROMPT_CHARS_PER_TOKEN=1
+ORG_LABEL=Οργανισμός
+```
 
-7. **Περιβάλλον συνομιλίας χρηστών (Chat):** [http://localhost:18080/](http://localhost:18080/) — Σύνδεση με `VIEWER_USER` / `VIEWER_PASSWORD`.
+Αυτές είναι οι ρυθμίσεις που χρησιμοποιήθηκαν στις πρόσφατες τοπικές δοκιμές. Το `.env.example` και οι προεπιλογές του κώδικα μπορεί να έχουν διαφορετικές τιμές· εφαρμόστε ρητά τις παραπάνω αλλαγές. Οι απαιτήσεις μνήμης και η ταχύτητα εξαρτώνται από το μηχάνημα και το παράθυρο context.
 
-8. Ανέβασε ένα **επιτρεπόμενο, μη διαβαθμισμένο PDF**. Συμπλήρωσε έναν σταθερό κωδικό εγγράφου (π.χ. `DK-0-3`) και πραγματοποίησε το upload. Έπειτα ανανέωσε το Admin για να παρακολουθήσεις τον ασύγχρονο worker. Το έγγραφο πρέπει να αποκτήσει κατάσταση `ready` προτού ο διαχειριστής επιλέξει χειροκίνητα **Ενεργοποίηση (Activate)**. Το RAG αναζητά πληροφορίες μόνο στην ενεργή έκδοση.
+Σε υπάρχουσα εγκατάσταση διατηρήστε το `COMPOSE_PROJECT_NAME`: η αλλαγή του μπορεί να οδηγήσει σε διαφορετικά Docker volumes. Μην αλλάξετε απλώς το `POSTGRES_PASSWORD` μετά την αρχικοποίηση της βάσης· απαιτείται αντίστοιχη αλλαγή κωδικού στην PostgreSQL.
 
-9. Για προβολή σφαλμάτων:
+### 3. Εκκίνηση
 
-   ```powershell
-   docker compose logs --tail=100 worker
-   docker compose logs --tail=100 api
-   ```
+```powershell
+docker compose up -d --build
+docker compose ps
+```
 
-10. Για τερματισμό:
+- **Chat:** [http://localhost:18080/](http://localhost:18080/) — λογαριασμός χρήστη ή διαχειριστή από το `.env`.
+- **Διαχείριση:** [http://localhost:18080/admin](http://localhost:18080/admin) — `ADMIN_USER` και `ADMIN_PASSWORD`.
 
-    ```powershell
-    docker compose down
-    ```
+Η διεύθυνση δημοσιεύεται από το `compose.yaml` ως **`127.0.0.1:18080:8080`**. Η μεταβλητή `APP_PORT` του παραδείγματος δεν χρησιμοποιείται από το σημερινό Compose και δεν αλλάζει αυτή τη θύρα.
 
-    Τα δεδομένα διατηρούνται. **ΜΗΝ** εκτελέσεις `docker compose down -v`, εκτός αν σκοπεύεις να διαγράψεις σκόπιμα τα μόνιμα volumes της PostgreSQL, του Redis και των PDF.
+### 4. Εισαγωγή εγγράφων
 
-## Εντοπισμός διπλότυπων και διαχείριση εκδόσεων
+1. Ανοίξτε τη Διαχείριση.
+2. Επιλέξτε PDF με αναγνώσιμο κείμενο και έναν σταθερό κωδικό, π.χ. `GUIDE-001`.
+3. Περιμένετε να ολοκληρωθεί η επεξεργασία και να εμφανιστεί κατάσταση `ready`.
+4. Επιλέξτε **Ενεργοποίηση**.
+5. Ανοίξτε το Chat και υποβάλετε ερώτηση.
 
-- Το SHA-256 **ολόκληρου του PDF** είναι μοναδικό σε κάθε εγκατάσταση οργανισμού. Αν ανεβεί ακριβώς το ίδιο αρχείο, η εισαγωγή απορρίπτεται χωρίς περιττή δημιουργία embeddings.
-- Το ίδιο `doc_key` με διαφορετικό SHA-256 δημιουργεί νέα, αμετάβλητη έκδοση (`version_number`) και νέα chunks. **Δεν** αντικαθιστά αυτόματα την ενεργή έκδοση.
-- Το embedding κάθε chunk αποθηκεύεται σε cache με κλειδί `(embed_model, sha256(model + breadcrumb + text))`. Ο worker επαναχρησιμοποιεί τα αποθηκευμένα vectors για περιεχόμενο που δεν έχει αλλάξει.
-- Ένα έγγραφο περνά από τις καταστάσεις `queued → processing → ready` (ή `failed`). Η κατάσταση `ready` **δεν σημαίνει** ότι έχει επιβεβαιωθεί η νομική ισχύς του εγγράφου. Η ενεργοποίηση μιας έκδοσης γίνεται χειροκίνητα από διαχειριστή.
-- Μην αλλάζεις το `EMBED_MODEL` ή τις διαστάσεις των vectors σε υπάρχουσα βάση χωρίς σχεδιασμένη διαδικασία επανευρετηρίασης ή μετάπτωσης (reindex/migration). Το schema χρησιμοποιεί `vector(1024)` και προς το παρόν αναμένει το `bge-m3`.
-- **Δεν περιλαμβάνεται OCR** για σαρωμένα PDF. Αν δεν μπορεί να εξαχθεί κείμενο από το αρχείο, η επεξεργασία θα αποτύχει. Η προσθήκη ασφαλούς OCR αποτελεί μελλοντική επέκταση.
+Αναζητούνται μόνο έτοιμες, ενεργοποιημένες εκδόσεις με το τρέχον embedding model. Η κατάσταση `ready` δηλώνει ολοκλήρωση επεξεργασίας, όχι επιβεβαίωση ορθότητας ή ισχύος του εγγράφου.
 
-## Όρια μεταξύ βάσης δεδομένων και containers
+## Καθημερινή χρήση και ενημέρωση
 
-Και οι τέσσερις υπηρεσίες (`db`, `redis`, `worker`, `api`) εκτελούνται σε Docker containers. Η εξυπηρέτηση μοντέλων συνδέεται μέσω της μεταβλητής περιβάλλοντος `OLLAMA_URL` και μπορεί αργότερα να αντικατασταθεί από κατάλληλο προσαρμογέα (adapter) άλλου inference API. Στο Linux, η δικτυακή πρόσβαση από τα containers προς το Ollama του host συνήθως απαιτεί εγκεκριμένο ιδιωτικό interface. Απόφυγε την έκθεση του Ollama σε μη έμπιστα δίκτυα. Η πρόσβαση μέσω `host.docker.internal` στο Docker Desktop πρέπει να επαληθεύεται πριν από κάθε εγκατάσταση.
+Εκτελέστε τις εντολές από τον φάκελο που περιέχει το `compose.yaml`.
 
-Η προεπιλεγμένη δημοσιευμένη θύρα του web interface δεσμεύεται σκόπιμα στο `127.0.0.1:8080`. Η πιλοτική εφαρμογή **ΔΕΝ** είναι προσβάσιμη από άλλους σταθμούς εργασίας και **ΔΕΝ** πρέπει να εκτεθεί όπως είναι. **Μην** αλλάξεις το binding του Compose σε `0.0.0.0` απλώς για να επιτρέψεις πρόσβαση από το LAN. Για εγκατάσταση με πολλούς σταθμούς εργασίας, πρέπει προηγουμένως να υλοποιηθούν: εταιρική ταυτοποίηση/SSO, αντίστροφος διακομιστής με TLS (TLS reverse proxy), εξουσιοδότηση ανά έγγραφο, προστασία CSRF, περιορισμός ρυθμού αιτημάτων (rate limiting), έλεγχος κακόβουλων αρχείων και επαλήθευση PDF, audit logs ανά χρήστη, αντίγραφα ασφαλείας με σχέδιο αποκατάστασης, έγκριση δικτύου/ασφάλειας και δοκιμές φόρτου/χωρητικότητας. Το Basic Auth παρέχεται **μόνο** για λειτουργία σε απομονωμένο πιλοτικό περιβάλλον.
+### Ενημέρωση από το main
 
-Η εφαρμογή δεν μπορεί να διαπιστώσει αν ένας νομοθετικός ή στρατιωτικός κανονισμός εξακολουθεί να ισχύει. Απαιτείται ανθρώπινη επαλήθευση της έκδοσης και της νομικής του ισχύος.
+```powershell
+git switch main
+git pull --ff-only origin main
+docker compose up -d --build
+```
 
-## Γνωστοί περιορισμοί / σχεδιασμός για τη v0.6
+Αν το Git αναφέρει τοπικές αλλαγές, ελέγξτε τες με `git status` πριν συνεχίσετε. Μετά την ενημέρωση του UI κάντε **Ctrl+F5** στον browser. Το `.env` και τα δεδομένα των volumes διατηρούνται.
 
-- Δεν υποστηρίζονται OCR για σαρωμένες σελίδες, συμφωνία εκδόσεων μεταξύ διαφορετικών εγγράφων, ανίχνευση επιμέρους αλλαγών, προηγμένη διαδικασία ελέγχου/έγκρισης, LDAP/AD/SSO, έλεγχος πρόσβασης βάσει ρόλων (RBAC/ACL), ενισχυμένη ασφάλεια browser ή απομόνωση συνεδριών τελικών χρηστών.
-- Χρησιμοποιούνται σταθερά vectors 1024 διαστάσεων και το `bge-m3`. Για διαφορετικό embedding provider απαιτείται προσαρμογή και migration.
-- Το αρχικό hybrid retrieval συνδυάζει cosine vector search με λεξική ομοιότητα PostgreSQL trigram, χρησιμοποιώντας RRF (Reciprocal Rank Fusion). Η συνάφεια αναζήτησης στα ελληνικά πρέπει να αξιολογηθεί με σύνολο ερωτήσεων-απαντήσεων αναφοράς (gold Q/A set).
-- Η ευρετηρίαση γίνεται ανά έγγραφο· δεν υπάρχει αυτόματη μαζική εισαγωγή πολλών εγγράφων. Είναι δυνατή η διαδοχική μεταφόρτωση από το UI.
-- Κατά τη σύνταξη της αρχικής πιλοτικής έκδοσης δεν είχαν πραγματοποιηθεί πραγματικές δοκιμές εκτέλεσης Docker ή penetration testing στο περιβάλλον ανάπτυξης. Απαιτείται επαλήθευση σε ελεγχόμενο δοκιμαστικό υπολογιστή.
+### Μόνο αλλαγές στο UI ή στο API
 
-## Χρήσιμες εντολές SQL (μέσα στο container της βάσης)
+```powershell
+docker compose up -d --build api
+```
+
+### Αλλαγές στο .env
+
+Για ρυθμίσεις chat ή σύνδεσης του API:
+
+```powershell
+docker compose up -d --force-recreate api
+```
+
+Αν αλλάξατε ρυθμίσεις που χρησιμοποιεί και ο worker, αναδημιουργήστε και τις δύο υπηρεσίες:
+
+```powershell
+docker compose up -d --force-recreate api worker
+```
+
+Το απλό `docker compose restart` δεν φορτώνει αλλαγμένες μεταβλητές περιβάλλοντος.
+
+### Κατάσταση, logs και τερματισμός
+
+```powershell
+docker compose ps
+docker compose logs --tail=100 api
+docker compose logs --tail=100 worker
+docker compose logs -f api worker
+```
+
+Με **Ctrl+C** σταματά μόνο η παρακολούθηση των logs.
+
+```powershell
+docker compose down
+```
+
+Τα δεδομένα διατηρούνται στα volumes. Η επιλογή `down -v` διαγράφει τα μόνιμα volumes· μην τη χρησιμοποιείτε για συνηθισμένη ενημέρωση ή επανεκκίνηση.
+
+## Έλεγχος σύνδεσης με Ollama
+
+Έκδοση και διαθέσιμα μοντέλα στα Windows:
+
+```powershell
+ollama --version
+ollama list
+```
+
+Έλεγχος του server που βλέπει πραγματικά το API container:
+
+```powershell
+docker compose exec api python -c "import requests; from inference import OLLAMA_URL; print('Endpoint:', OLLAMA_URL); r=requests.get(OLLAMA_URL+'/api/version',timeout=10); r.raise_for_status(); print(r.json())"
+```
+
+Αν αποτύχει, ελέγξτε ότι το Ollama λειτουργεί στα Windows, τη ρύθμιση `OLLAMA_URL` και τους κανόνες δικτύου/firewall. Η διαδρομή `host.docker.internal` αφορά τη σύνδεση από τα containers προς τον host.
+
+## Διαγνωστικά generation
+
+Τα logs του API περιλαμβάνουν μοντέλο, `num_ctx`, `num_predict`, `prompt_eval_count`, `eval_count` και `done_reason`.
+
+- `stop`: ο server τερμάτισε κανονικά την παραγωγή· δεν πιστοποιεί ορθότητα της απάντησης.
+- `length`: η παραγωγή σταμάτησε σε όριο και ενδέχεται να είναι ημιτελής.
+- HTTP 400 με μήνυμα υπέρβασης context: το αίτημα δεν χωρά στο διαθέσιμο παράθυρο.
+
+Το context και η απάντηση μοιράζονται το ίδιο παράθυρο. Η επιλογή πηγών χρησιμοποιεί την εκτίμηση `PROMPT_CHARS_PER_TOKEN`, όχι ακριβή tokenizer. Η εκτίμηση εξαρτάται από μοντέλο και γλώσσα και μπορεί να υπομετρήσει τα tokens ή να αποκλείσει χρήσιμες πηγές.
+
+### Σύγκριση prompts και ορίων εξόδου
+
+Το εργαλείο επιλέγει μία συγκεκριμένη διάταξη από τα ήδη ευρετηριασμένα δεδομένα και τη συγκρίνει με τις πηγές της κανονικής ανάκτησης. Συμπληρώστε πραγματικές τιμές από τα στοιχεία του εγγράφου σας:
+
+```powershell
+$question = Read-Host "Ερώτηση"
+$docKey = Read-Host "Κωδικός εγγράφου"
+$section = Read-Host "Αριθμός τμήματος"
+$paragraph = Read-Host "Αριθμός παραγράφου"
+$subsection = Read-Host "Υποπαράγραφος"
+docker compose exec -e CHAT_MODEL=qwen3:4b-instruct -e CHAT_NUM_CTX=8192 -e CHAT_NUM_PREDICT=500 -e PROMPT_CHARS_PER_TOKEN=1 api python diagnose_generation.py --compare-prompts --output-limits 500 1000 --question "$question" --doc-key "$docKey" --section "$section" --paragraph "$paragraph" --subsection "$subsection"
+```
+
+Παράγονται οκτώ αποτελέσματα: δύο context × δύο prompts × δύο όρια εξόδου. Τα `focused` και `retrieved` δηλώνουν τη συγκεκριμένη διάταξη και την κανονική ανάκτηση αντίστοιχα.
+
+Οι πηγές επιλέγονται μία φορά ανά context με το αρχικό όριο των 500 tokens. Η επιλογή `--output-limits` αλλάζει μόνο την παραγωγή. Το `context_sha256` επιτρέπει επιβεβαίωση ότι οι πηγές παρέμειναν ίδιες μεταξύ των δοκιμών. Οι επιλογές `-e` ισχύουν μόνο για αυτή την εκτέλεση και δεν αλλάζουν το μοντέλο του chat.
+
+Το απλούστερο prompt είναι πειραματικό. Οι μεμονωμένες εκτελέσεις δεν αποτελούν συνολική αξιολόγηση ποιότητας.
+
+## Έγγραφα, εκδόσεις και δεδομένα
+
+- Πανομοιότυπο PDF εντοπίζεται μέσω SHA-256 και δεν εισάγεται δεύτερη φορά.
+- Διαφορετικό PDF με ίδιο κωδικό δημιουργεί νέα έκδοση. Η ενεργοποίηση γίνεται ξεχωριστά.
+- Τα embeddings αποθηκεύονται προσωρινά για επαναχρησιμοποίηση αμετάβλητου περιεχομένου.
+- Το schema χρησιμοποιεί vectors 1024 διαστάσεων. Αλλαγή embedding model απαιτεί σχεδιασμένη επανευρετηρίαση και ενδεχομένως migration.
+- Τα PDF αποθηκεύονται σε Docker volume, όχι μέσα στην PostgreSQL.
+
+Κατάλογος εγγράφων από τη βάση:
 
 ```powershell
 docker compose exec db psql -U rag -d rag -c "SELECT doc_key,version_number,status,is_active,chunk_count FROM documents ORDER BY uploaded_at DESC;"
 ```
 
-Για αντίγραφο ασφαλείας της PostgreSQL, δημιούργησε συνεπές backup με `pg_dump` και, ξεχωριστά, πάρε αντίγραφο του volume των PDF. Έλεγξε στην πράξη τη διαδικασία επαναφοράς (restore). Τα πρωτότυπα PDF αποθηκεύονται στο Docker volume `documents`, όχι στην PostgreSQL.
+Για backup χρειάζονται συνεπές αντίγραφο της PostgreSQL με `pg_dump` και αντίγραφο του volume των PDF. Επαληθεύστε τη διαδικασία επαναφοράς.
 
-### Generation diagnostics and prompt budget
+## Περιορισμοί
 
-`CHAT_NUM_CTX` (4096) and `CHAT_NUM_PREDICT` (500) are configurable in `.env`.
-Source packing counts the system prompt, question and source headers, reserving
-output tokens plus `PROMPT_MARGIN` (256). Whole sources are retained in ranking
-order when they fit; oversized sources are skipped, and no fitting source produces
-an explicit error. The UI displays exactly the sources sent to generation.
-`PROMPT_CHARS_PER_TOKEN=2` is a conservative character heuristic for the observed
-Greek workload, **not an exact tokenizer or a guarantee against truncation**.
-Inspect `prompt_eval_count`, `eval_count` and `done_reason` in API logs. Increasing
-the context window may increase memory use; validate locally before changing it.
+- Δεν περιλαμβάνεται OCR για σαρωμένα PDF ή ειδική κατανόηση πινάκων.
+- Η ανάλυση δομής μπορεί να ομαδοποιήσει λανθασμένα επαναλαμβανόμενες αριθμήσεις.
+- Η επιλογή context μπορεί να παραλείψει κρίσιμες πληροφορίες.
+- Οι απαντήσεις μπορεί να περιέχουν παραλείψεις, ατεκμηρίωτες συνδέσεις ή λάθος αντιστοίχιση παραπομπών.
+- Η συνομιλία διατηρείται μόνο στην ανοιχτή σελίδα. Δεν υπάρχει μόνιμο ιστορικό και τα προηγούμενα μηνύματα δεν αποστέλλονται ως μνήμη στο μοντέλο.
+- Η εφαρμογή δεν επαληθεύει αυτόματα αν μια έκδοση εγγράφου παραμένει σε ισχύ.
+- Η πρόσβαση είναι Basic Auth με λογαριασμό διαχειριστή και χρήστη, χωρίς SSO ή δικαιώματα ανά έγγραφο. Ο χρήστης βλέπει τις ενεργοποιημένες εκδόσεις.
 
-To compare current/simple prompts with identical sources and the same question,
-append `--compare-prompts` to the `diagnose_generation.py` command. This produces
-four outputs: focused/current, focused/simple, retrieved/current, retrieved/simple.
-The simpler prompt is experimental and does not replace the application's prompt.
-Source packing is identical between both prompt variants. These are individual
-stochastic runs, not a statistically controlled model comparison.
-
-Add `--output-limits 500 1000` to the diagnostic command to compare output
-budgets. Sources are retrieved/packed once per context mode using the environment's
-`CHAT_NUM_PREDICT` value; the CLI override affects generation only. The emitted
-`context_sha256` must match between limits/prompts within a mode. Actual token
-fit still depends on the model tokenizer; inspect completion diagnostics. Provider
-errors are reported per case without aborting all remaining cases.
+Η τρέχουσα ρύθμιση ακούει μόνο στο localhost. Για κοινή χρήση μέσω δικτύου απαιτείται κατάλληλη διαμόρφωση πρόσβασης και ασφάλειας. Το `.env`, τα διαπιστευτήρια και τα δεδομένα σας δεν πρέπει να προστίθενται στο Git.
