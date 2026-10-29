@@ -1,3 +1,4 @@
+import logging
 import os
 import requests
 
@@ -45,7 +46,27 @@ def answer(question, context):
         return (r.json().get('message') or {}).get('content', '').strip()
 
 
-def stream_answer(question, context):
+def completion_diagnostics(result, question, context):
+    payload = _payload(question, context)
+    reason = result.get('done_reason')
+    count = result.get('eval_count')
+    limit = payload['options']['num_predict']
+    diagnostics = {
+        'model': CHAT_MODEL,
+        'num_ctx': payload['options']['num_ctx'], 'num_predict': limit,
+        'context_chars': len(context),
+        'message_chars': sum(len(m['content']) for m in payload['messages']),
+        'prompt_eval_count': result.get('prompt_eval_count'),
+        'eval_count': count, 'done_reason': reason,
+        'output_limit_reached': reason == 'length' or (isinstance(count, int) and count >= limit),
+        # Counts do not prove whether Ollama truncated the submitted prompt.
+        'prompt_truncation': 'unknown',
+    }
+    logging.getLogger(__name__).warning('Ollama completion diagnostics: %s', diagnostics)
+    return diagnostics
+
+
+def stream_answer(question, context, on_complete=None):
     import json
     with requests.post(f'{OLLAMA_URL}/api/chat', json=_payload(question, context, True),
                        stream=True, timeout=(10, 240)) as r:
@@ -60,5 +81,8 @@ def stream_answer(question, context):
             if token:
                 yield token
             if event.get('done'):
+                diagnostics = completion_diagnostics(event, question, context)
+                if on_complete is not None:
+                    on_complete(diagnostics)
                 return
         raise RuntimeError('Ollama stream ended before completion')

@@ -50,6 +50,24 @@ class StreamingTests(unittest.TestCase):
             stream.close()
         self.assertTrue(response.closed)
 
+    def test_completion_callback_reports_output_limit(self):
+        response, mock = self.run_stream([{'message': {'content': 'partial'}, 'done': True,
+                                          'done_reason': 'length', 'eval_count': 500,
+                                          'prompt_eval_count': 3500}])
+        diagnostics = {}
+        with mock:
+            self.assertEqual(''.join(inference.stream_answer('q', 'c', diagnostics.update)), 'partial')
+        self.assertTrue(diagnostics['output_limit_reached'])
+        self.assertEqual(diagnostics['prompt_eval_count'], 3500)
+        self.assertEqual(diagnostics['prompt_truncation'], 'unknown')
+
+    def test_normal_stop_and_missing_reason_at_limit(self):
+        with self.assertLogs('inference', level='WARNING'):
+            normal = inference.completion_diagnostics({'done_reason': 'stop', 'eval_count': 20}, 'q', 'c')
+            limited = inference.completion_diagnostics({'eval_count': 500}, 'q', 'c')
+        self.assertFalse(normal['output_limit_reached'])
+        self.assertTrue(limited['output_limit_reached'])
+
     def test_same_prompt_and_parameters_for_both_modes(self):
         normal = inference._payload('q', 'c')
         streaming = inference._payload('q', 'c', True)

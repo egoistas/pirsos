@@ -87,9 +87,12 @@ def ask_stream(question: str = Form(...), username=Depends(require_viewer)):
                     f"[ΠΗΓΗ {i}] {s['doc_key']} | PDF σελ. {s['page']}–{s['page_end']} | {s['breadcrumb']}\n{s['text']}"
                     for i, s in enumerate(sources, 1))
                 yield event('status', message='Σύνταξη απάντησης…')
-                for token in stream_answer(question, context):
+                diagnostics = {}
+                for token in stream_answer(question, context, on_complete=diagnostics.update):
                     yield event('token', text=token)
-            yield event('done')
+                yield event('done', output_limit_reached=diagnostics.get('output_limit_reached', False))
+                return
+            yield event('done', output_limit_reached=False)
         except Exception:
             logging.getLogger(__name__).exception('Streaming RAG failed')
             yield event('error', message='Η απάντηση δεν ολοκληρώθηκε. Ελέγξτε Ollama και τα logs και δοκιμάστε ξανά.')

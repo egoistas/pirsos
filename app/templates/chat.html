@@ -49,7 +49,9 @@
       else if (event.type === 'sources') showSources(event.sources);
       else if (event.type === 'token') output.append(document.createTextNode(event.text));
       else if (event.type === 'error') throw new Error(event.message);
-      else if (event.type === 'done') { completed = true; status.textContent = 'Ολοκληρώθηκε.'; }
+      else if (event.type === 'done') { completed = true; status.textContent = event.output_limit_reached
+        ? 'Η απάντηση έφτασε το όριο παραγωγής και ενδέχεται να είναι ημιτελής.'
+        : 'Ολοκληρώθηκε.'; }
     }
     try {
       const response = await fetch('/ask/stream', {method: 'POST', body: new FormData(form)});
