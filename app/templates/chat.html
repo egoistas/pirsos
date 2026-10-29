@@ -1,6 +1,78 @@
 {% extends 'base.html' %}{% block content %}
 <h1>Βοηθός Κανονισμών</h1><p class="muted">{{ org }} · Αναζήτηση μόνο σε εγκεκριμένες/ενεργοποιημένες εκδόσεις · Χρήστης: {{ username }}</p>
-<div class="card"><form action="/ask" method="post"><label for="q">Ερώτηση στα ελληνικά</label><textarea id="q" name="question" maxlength="1500" required placeholder="π.χ. Πού τοποθετούνται οι υπογραφές σε σχέδιο εγγράφου;">{{ question }}</textarea><p><button type="submit">🔍 Αναζήτηση & απάντηση</button></p></form></div>
+<div class="card"><form id="chat-form" action="/ask" method="post"><label for="q">Ερώτηση στα ελληνικά</label><textarea id="q" name="question" maxlength="1500" required placeholder="π.χ. Πού τοποθετούνται οι υπογραφές σε σχέδιο εγγράφου;">{{ question }}</textarea><p><button type="submit">🔍 Αναζήτηση & απάντηση</button></p></form></div>
 {% if answer is not none %}<div class="card"><h2>Απάντηση</h2><div class="text">{{ answer }}</div></div>
 <div class="card"><h2>Πηγές</h2>{% for s in sources %}<div class="source"><strong>[ΠΗΓΗ {{ loop.index }}] {{ s.doc_key }}</strong> — PDF σελ. {{ s.page }}–{{ s.page_end }}<br><small>{{ s.breadcrumb }}</small><p class="text">{{ s.text }}</p><a href="/files/{{ s.document_id }}#page={{ s.page }}" target="_blank">Προβολή πρωτοτύπου</a></div>{% else %}<p class="muted">Δεν βρέθηκαν ανακτημένα αποσπάσματα.</p>{% endfor %}</div>{% endif %}
+<section id="live-answer" class="card" hidden aria-busy="false"><h2>Απάντηση</h2><p id="chat-status" class="muted" role="status" aria-live="polite"></p><div id="answer-text" class="text"></div></section>
+<section id="live-sources" class="card" hidden><h2>Πηγές</h2><div id="source-list"></div></section>
+<script>
+(() => {
+  if (!window.fetch || !window.TextDecoder || !window.ReadableStream) return;
+  const form = document.getElementById('chat-form');
+  const panel = document.getElementById('live-answer');
+  const output = document.getElementById('answer-text');
+  const status = document.getElementById('chat-status');
+  const sourcesPanel = document.getElementById('live-sources');
+  const sourceList = document.getElementById('source-list');
+  const button = form.querySelector('button');
+  function showSources(sources) {
+    sourceList.replaceChildren();
+    sourcesPanel.hidden = false;
+    if (!sources.length) {
+      sourceList.textContent = 'Δεν βρέθηκαν ανακτημένα αποσπάσματα.';
+      return;
+    }
+    sources.forEach((source, i) => {
+      const box = document.createElement('div'); box.className = 'source';
+      const title = document.createElement('strong');
+      title.textContent = `[ΠΗΓΗ ${i + 1}] ${source.doc_key} — PDF σελ. ${source.page}–${source.page_end}`;
+      const crumb = document.createElement('p'); crumb.textContent = source.breadcrumb;
+      const text = document.createElement('p'); text.className = 'text'; text.textContent = source.text;
+      const link = document.createElement('a'); link.textContent = 'Προβολή πρωτοτύπου';
+      link.href = `/files/${encodeURIComponent(source.document_id)}#page=${Number(source.page)}`;
+      link.target = '_blank'; link.rel = 'noopener';
+      box.append(title, crumb, text, link); sourceList.append(box);
+    });
+  }
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (button.disabled) return;
+    button.disabled = true; panel.hidden = false; panel.setAttribute('aria-busy', 'true');
+    output.textContent = ''; sourceList.replaceChildren(); sourcesPanel.hidden = true;
+    status.textContent = 'Αναζήτηση πηγών…';
+    let reader;
+    let completed = false;
+    function consume(line) {
+      if (!line.trim()) return;
+      const event = JSON.parse(line);
+      if (event.type === 'status') status.textContent = event.message;
+      else if (event.type === 'sources') showSources(event.sources);
+      else if (event.type === 'token') output.append(document.createTextNode(event.text));
+      else if (event.type === 'error') throw new Error(event.message);
+      else if (event.type === 'done') { completed = true; status.textContent = 'Ολοκληρώθηκε.'; }
+    }
+    try {
+      const response = await fetch('/ask/stream', {method: 'POST', body: new FormData(form)});
+      if (!response.ok || !response.body) throw new Error('Αποτυχία σύνδεσης. Δοκιμάστε ξανά.');
+      reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      while (true) {
+        const {value, done} = await reader.read();
+        buffer += decoder.decode(value, {stream: !done});
+        const lines = buffer.split('\n'); buffer = lines.pop();
+        lines.forEach(consume);
+        if (done) { consume(buffer); break; }
+      }
+      if (!completed) throw new Error('Η σύνδεση διακόπηκε. Η απάντηση είναι ημιτελής.');
+    } catch (error) {
+      status.textContent = error.message || 'Η απάντηση δεν ολοκληρώθηκε.';
+      if (reader) await reader.cancel().catch(() => {});
+    } finally {
+      if (reader) reader.releaseLock();
+      panel.setAttribute('aria-busy', 'false'); button.disabled = false;
+    }
+  });
+})();
+</script>
 {% endblock %}
