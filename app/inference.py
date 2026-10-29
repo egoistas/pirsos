@@ -42,13 +42,13 @@ SIMPLE_PROMPT = """Απάντησε στα ελληνικά μόνο από τι
 Δώσε σύντομη απάντηση με παραπομπή [ΠΗΓΗ n]. Αν δεν τεκμηριώνεται, δήλωσέ το."""
 
 
-def _payload(question, context, stream=False, system_prompt=None):
+def _payload(question, context, stream=False, system_prompt=None, num_predict=None):
     return {
         'model': CHAT_MODEL, 'stream': stream, 'think': False,
         'messages': [
             {'role': 'system', 'content': SYSTEM_PROMPT if system_prompt is None else system_prompt},
             {'role': 'user', 'content': 'ΑΠΟΣΠΑΣΜΑΤΑ:\n' + context + '\n\nΕΡΩΤΗΣΗ:\n' + question}],
-        'options': {'temperature': 0.1, 'num_ctx': CHAT_NUM_CTX, 'num_predict': CHAT_NUM_PREDICT}}
+        'options': {'temperature': 0.1, 'num_ctx': CHAT_NUM_CTX, 'num_predict': CHAT_NUM_PREDICT if num_predict is None else num_predict}}
 
 
 def answer(question, context):
@@ -57,8 +57,8 @@ def answer(question, context):
         return (r.json().get('message') or {}).get('content', '').strip()
 
 
-def completion_diagnostics(result, question, context, system_prompt=None):
-    payload = _payload(question, context, system_prompt=system_prompt)
+def completion_diagnostics(result, question, context, system_prompt=None, num_predict=None):
+    payload = _payload(question, context, system_prompt=system_prompt, num_predict=num_predict)
     reason = result.get('done_reason')
     count = result.get('eval_count')
     limit = payload['options']['num_predict']
@@ -77,9 +77,9 @@ def completion_diagnostics(result, question, context, system_prompt=None):
     return diagnostics
 
 
-def stream_answer(question, context, on_complete=None, system_prompt=None):
+def stream_answer(question, context, on_complete=None, system_prompt=None, num_predict=None):
     import json
-    with requests.post(f'{OLLAMA_URL}/api/chat', json=_payload(question, context, True, system_prompt),
+    with requests.post(f'{OLLAMA_URL}/api/chat', json=_payload(question, context, True, system_prompt, num_predict),
                        stream=True, timeout=(10, 240)) as r:
         r.raise_for_status()
         for line in r.iter_lines():
@@ -92,7 +92,7 @@ def stream_answer(question, context, on_complete=None, system_prompt=None):
             if token:
                 yield token
             if event.get('done'):
-                diagnostics = completion_diagnostics(event, question, context, system_prompt)
+                diagnostics = completion_diagnostics(event, question, context, system_prompt, num_predict)
                 if on_complete is not None:
                     on_complete(diagnostics)
                 return

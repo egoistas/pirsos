@@ -68,6 +68,19 @@ class StreamingTests(unittest.TestCase):
         self.assertFalse(normal['output_limit_reached'])
         self.assertTrue(limited['output_limit_reached'])
 
+    def test_output_override_changes_only_generation_limit(self):
+        baseline = inference._payload('q', 'context')
+        extended = inference._payload('q', 'context', num_predict=1000)
+        self.assertEqual(baseline['messages'], extended['messages'])
+        self.assertEqual(extended['options']['num_predict'], 1000)
+        response, mock = self.run_stream([{'done': True, 'done_reason': 'stop', 'eval_count': 600}])
+        diagnostics = {}
+        with mock as post:
+            list(inference.stream_answer('q', 'context', diagnostics.update, num_predict=1000))
+            self.assertEqual(post.call_args.kwargs['json']['options']['num_predict'], 1000)
+        self.assertEqual(diagnostics['num_predict'], 1000)
+        self.assertFalse(diagnostics['output_limit_reached'])
+
     def test_same_prompt_and_parameters_for_both_modes(self):
         normal = inference._payload('q', 'c')
         streaming = inference._payload('q', 'c', True)

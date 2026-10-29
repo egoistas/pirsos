@@ -116,3 +116,10 @@ four outputs: focused/current, focused/simple, retrieved/current, retrieved/simp
 The simpler prompt is experimental and does not replace the application's prompt.
 Source packing is identical between both prompt variants. These are individual
 stochastic runs, not a statistically controlled model comparison.
+
+Add `--output-limits 500 1000` to the diagnostic command to compare output
+budgets. Sources are retrieved/packed once per context mode using the environment's
+`CHAT_NUM_PREDICT` value; the CLI override affects generation only. The emitted
+`context_sha256` must match between limits/prompts within a mode. Actual token
+fit still depends on the model tokenizer; inspect completion diagnostics. Provider
+errors are reported per case without aborting all remaining cases.
