@@ -1,5 +1,7 @@
 """Military RAG v0.5 portable Docker pilot. NOT APPROVED for protected/classified networks."""
 from __future__ import annotations
+import json
+import logging
 import hashlib
 import os
 from pathlib import Path
@@ -8,14 +10,15 @@ import uuid
 
 import fitz
 from fastapi import FastAPI, Request, UploadFile, File, Form, Depends, HTTPException, status
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from redis import Redis
 from rq import Queue
 from db import connect, audit
-from retrieval import run_rag
-from inference import EMBED_MODEL
+from retrieval import run_rag, retrieve
+from prompt_context import pack_sources
+from inference import EMBED_MODEL, stream_answer
 
 STORAGE=Path('/storage/documents')
 STORAGE.mkdir(parents=True,exist_ok=True)
@@ -63,6 +66,38 @@ def ask(request:Request,question:str=Form(...),username=Depends(require_viewer))
     try: result,sources=run_rag(question)
     except Exception as exc: result,sources='Σφάλμα επικοινωνίας με την υπηρεσία AI ή τη βάση. Ελέγξτε Ollama και τα logs.',[]
     return render(request,'chat.html',answer=result,sources=sources,question=question,username=username)
+
+@app.post('/ask/stream')
+def ask_stream(question: str = Form(...), username=Depends(require_viewer)):
+    question = question.strip()
+    if not question or len(question) > 1500:
+        raise HTTPException(400, 'Question length must be 1-1500 characters')
+
+    def event(kind, **data):
+        return json.dumps({'type': kind, **data}, ensure_ascii=False) + '\n'
+
+    def generate():
+        try:
+            yield event('status', message='Αναζήτηση πηγών…')
+            sources, context = pack_sources(question, retrieve(question))
+            yield event('sources', sources=sources)
+            if not sources:
+                yield event('token', text='Δεν υπάρχουν ενεργοποιημένοι, έτοιμοι κανονισμοί με το τρέχον embedding model.')
+            else:
+                yield event('status', message='Σύνταξη απάντησης…')
+                diagnostics = {}
+                for token in stream_answer(question, context, on_complete=diagnostics.update):
+                    yield event('token', text=token)
+                yield event('done', output_limit_reached=diagnostics.get('output_limit_reached', False))
+                return
+            yield event('done', output_limit_reached=False)
+        except Exception:
+            logging.getLogger(__name__).exception('Streaming RAG failed')
+            yield event('error', message='Η απάντηση δεν ολοκληρώθηκε. Ελέγξτε Ollama και τα logs και δοκιμάστε ξανά.')
+
+    return StreamingResponse(generate(), media_type='application/x-ndjson',
+                             headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
 
 @app.get('/admin',response_class=HTMLResponse)
 def admin_home(request:Request,username=Depends(require_admin)):

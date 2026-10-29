@@ -97,3 +97,29 @@ docker compose exec db psql -U rag -d rag -c "SELECT doc_key,version_number,stat
 ```
 
 Για αντίγραφο ασφαλείας της PostgreSQL, δημιούργησε συνεπές backup με `pg_dump` και, ξεχωριστά, πάρε αντίγραφο του volume των PDF. Έλεγξε στην πράξη τη διαδικασία επαναφοράς (restore). Τα πρωτότυπα PDF αποθηκεύονται στο Docker volume `documents`, όχι στην PostgreSQL.
+
+### Generation diagnostics and prompt budget
+
+`CHAT_NUM_CTX` (4096) and `CHAT_NUM_PREDICT` (500) are configurable in `.env`.
+Source packing counts the system prompt, question and source headers, reserving
+output tokens plus `PROMPT_MARGIN` (256). Whole sources are retained in ranking
+order when they fit; oversized sources are skipped, and no fitting source produces
+an explicit error. The UI displays exactly the sources sent to generation.
+`PROMPT_CHARS_PER_TOKEN=2` is a conservative character heuristic for the observed
+Greek workload, **not an exact tokenizer or a guarantee against truncation**.
+Inspect `prompt_eval_count`, `eval_count` and `done_reason` in API logs. Increasing
+the context window may increase memory use; validate locally before changing it.
+
+To compare current/simple prompts with identical sources and the same question,
+append `--compare-prompts` to the `diagnose_generation.py` command. This produces
+four outputs: focused/current, focused/simple, retrieved/current, retrieved/simple.
+The simpler prompt is experimental and does not replace the application's prompt.
+Source packing is identical between both prompt variants. These are individual
+stochastic runs, not a statistically controlled model comparison.
+
+Add `--output-limits 500 1000` to the diagnostic command to compare output
+budgets. Sources are retrieved/packed once per context mode using the environment's
+`CHAT_NUM_PREDICT` value; the CLI override affects generation only. The emitted
+`context_sha256` must match between limits/prompts within a mode. Actual token
+fit still depends on the model tokenizer; inspect completion diagnostics. Provider
+errors are reported per case without aborting all remaining cases.

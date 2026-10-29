@@ -1,6 +1,76 @@
 {% extends 'base.html' %}{% block content %}
-<h1>Βοηθός Κανονισμών</h1><p class="muted">{{ org }} · Αναζήτηση μόνο σε εγκεκριμένες/ενεργοποιημένες εκδόσεις · Χρήστης: {{ username }}</p>
-<div class="card"><form action="/ask" method="post"><label for="q">Ερώτηση στα ελληνικά</label><textarea id="q" name="question" maxlength="1500" required placeholder="π.χ. Πού τοποθετούνται οι υπογραφές σε σχέδιο εγγράφου;">{{ question }}</textarea><p><button type="submit">🔍 Αναζήτηση & απάντηση</button></p></form></div>
-{% if answer is not none %}<div class="card"><h2>Απάντηση</h2><div class="text">{{ answer }}</div></div>
-<div class="card"><h2>Πηγές</h2>{% for s in sources %}<div class="source"><strong>[ΠΗΓΗ {{ loop.index }}] {{ s.doc_key }}</strong> — PDF σελ. {{ s.page }}–{{ s.page_end }}<br><small>{{ s.breadcrumb }}</small><p class="text">{{ s.text }}</p><a href="/files/{{ s.document_id }}#page={{ s.page }}" target="_blank">Προβολή πρωτοτύπου</a></div>{% else %}<p class="muted">Δεν βρέθηκαν ανακτημένα αποσπάσματα.</p>{% endfor %}</div>{% endif %}
+<style>
+body:has(.chat-shell){height:100dvh;display:flex;flex-direction:column;overflow:hidden}body:has(.chat-shell)>header{flex-shrink:0}body:has(.chat-shell)>main{width:100%;max-width:960px;margin:0 auto;padding:0 24px;flex:1;min-height:0;display:flex;flex-direction:column}body:has(.chat-shell)>footer{display:none}.chat-shell{display:flex;flex-direction:column;flex:1;min-height:0}.chat-heading{padding:20px 0 12px;display:flex;justify-content:space-between;gap:12px;align-items:center;border-bottom:1px solid #273449}.chat-heading h1{font-size:21px;margin:0}.chat-heading p{font-size:12px;margin:5px 0 0}.chat-feed{flex:1;min-height:0;overflow-y:auto;scroll-behavior:smooth;padding:24px 4px;scrollbar-gutter:stable}.welcome{padding:9vh 12px;text-align:center}.welcome-icon{margin:auto auto 18px;border:1px solid #304058;background:#151f31;border-radius:20px;width:62px;height:62px;display:grid;place-items:center;font-size:28px}.welcome h2{font-size:27px;margin:0 0 10px}.welcome p{line-height:1.65;max-width:470px;margin:auto}.turn{margin:0 0 32px}.user-message{margin:0 0 22px auto;background:#1c3151;border:1px solid #355077;border-radius:19px 19px 5px 19px;padding:13px 18px;max-width:85%;white-space:pre-wrap;overflow-wrap:anywhere}.assistant-label{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px;margin-bottom:10px}.spark{color:#93c5fd}.turn-status{font-size:12px;color:#9eafc7;margin-left:23px;min-height:18px}.turn-status.busy:before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:#60a5fa;margin-right:8px;animation:pulse 1.2s infinite}.answer-body{line-height:1.75;overflow-wrap:anywhere;white-space:pre-wrap;margin:12px 0 18px 23px}.generating:after{content:'';display:inline-block;width:7px;height:16px;background:#93c5fd;margin-left:4px;vertical-align:middle;animation:pulse 1s infinite}.sources-heading{font-size:13px;color:#a9bad0;margin:18px 0 10px 23px}.source-cards{display:grid;gap:8px;margin-left:23px}.source-card{background:#101a2b;border:1px solid #304058;border-radius:12px;overflow:hidden;animation:arrive .25s ease-out both}.source-card summary{cursor:pointer;padding:13px 15px;line-height:1.5;font-size:13px}.source-card summary strong{color:#bfdbfe}.source-content{border-top:1px solid #273449;padding:13px 15px}.source-content small{display:block;overflow-wrap:anywhere}.source-content .text{font-size:13px;max-height:300px;overflow:auto}.pdf-link{display:inline-flex;padding:8px 12px;border:1px solid #3b5278;border-radius:8px;text-decoration:none;font-size:12px;margin-top:5px}.composer-area{flex-shrink:0;padding:12px 0 max(12px,env(safe-area-inset-bottom));background:#0b1220}.composer{border:1px solid #435777;background:#151f31;border-radius:20px;padding:12px 12px 10px;box-shadow:0 8px 30px #0003}.composer:focus-within{border-color:#78a6ec;box-shadow:0 0 0 3px #2563eb20}.composer textarea{display:block;border:0;background:transparent;border-radius:0;min-height:48px;max-height:160px;resize:none;padding:3px 6px;width:100%;outline:none;line-height:1.6}.composer-bottom{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:6px}.composer-hint{font-size:11px;color:#9eafc7;padding-left:6px}.send-button{display:inline-flex;align-items:center;gap:9px;border-radius:12px;padding:10px 16px;background:linear-gradient(135deg,#377cf4,#2454c6);box-shadow:0 3px 12px #2563eb30;transition:transform .15s,filter .15s}.send-button:hover{transform:translateY(-1px)}.send-button:disabled{opacity:.55;cursor:wait;transform:none}.send-button svg{width:18px;height:18px}.composer-note{text-align:center;font-size:11px;color:#9eafc7;margin:9px 4px 0}.feed-bottom{align-self:center;font-size:12px;margin:4px;background:#263b59}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}@keyframes pulse{50%{opacity:.3}}@keyframes arrive{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){*,*:after{animation:none!important;scroll-behavior:auto!important;transition:none!important}}@media(max-width:600px){body:has(.chat-shell)>main{padding:0 12px}.chat-heading{padding-top:14px}.chat-heading p{max-width:230px}.user-message{max-width:94%}.answer-body,.source-cards,.sources-heading{margin-left:0}.composer-hint{font-size:10px}.send-button{padding:10px 12px}.welcome{padding-top:7vh}.welcome h2{font-size:23px}}
+
+.chat-shell{position:relative}.chat-feed{padding-top:20px}.composer-area{padding-top:8px;padding-bottom:max(8px,env(safe-area-inset-bottom))}.composer{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px;padding:8px 10px;border-radius:16px}.composer textarea{min-height:30px;max-height:min(160px,22dvh);line-height:1.5;padding:4px 6px;overflow-y:hidden}.composer-bottom{padding:0;display:block}.composer-hint{display:none}.send-button{padding:8px 12px;border-radius:10px;min-height:36px}.composer-note{font-size:10px;margin:5px 2px 0}.feed-bottom{position:absolute;left:50%;transform:translateX(-50%);bottom:100px;z-index:2;margin:0;padding:7px 12px;box-shadow:0 4px 16px #0005}.answer-body{line-height:1.6}.turn{margin-bottom:24px}@media(max-width:600px){.send-button{padding:8px 10px}.send-button>span{display:none}.feed-bottom{bottom:100px}.composer-note{font-size:9px}}
+</style>
+<div class="chat-shell">
+<div id="chat-feed" class="chat-feed" aria-label="Συνομιλία">
+{% if answer is not none %}
+<article class="turn"><div class="user-message">{{ question }}</div><div class="assistant-label"><span class="spark">✦</span> Πυρσός</div><div class="answer-body">{{ answer }}</div><div class="sources-heading">Πηγές</div><div class="source-cards">{% for s in sources %}<details class="source-card"><summary><strong>[ΠΗΓΗ {{ loop.index }}] {{ s.doc_key }}</strong> · σελ. {{ s.page }}–{{ s.page_end }}</summary><div class="source-content"><small>{{ s.breadcrumb }}</small><p class="text">{{ s.text }}</p><a class="pdf-link" href="/files/{{ s.document_id }}#page={{ s.page }}" target="_blank" rel="noopener">Άνοιγμα πρωτοτύπου ↗</a></div></details>{% endfor %}</div></article>
+{% else %}
+<div id="welcome" class="welcome"><div class="welcome-icon">✦</div><h2>Τι θέλετε να βρούμε;</h2><p class="muted">Ρωτήστε για τους κανονισμούς σας.<br>Διαβάστε την απάντηση και ανοίξτε τις πηγές για επιβεβαίωση.</p></div>
+{% endif %}
+</div>
+<button id="feed-bottom" class="feed-bottom" type="button" hidden>Στο τελευταίο μήνυμα ↓</button>
+<div class="composer-area"><form id="chat-form" class="composer" action="/ask" method="post"><label class="sr-only" for="q">Η ερώτησή σας</label><textarea id="q" name="question" maxlength="1500" rows="1" required placeholder="Γράψτε την ερώτησή σας…"></textarea><div class="composer-bottom"><span class="composer-hint">Enter για αποστολή · Shift+Enter για νέα γραμμή</span><button class="send-button" type="submit" aria-label="Αποστολή ερώτησης"><span>Αποστολή</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></form><p class="composer-note">Πιλοτικό σύστημα · Ελέγχετε το πρωτότυπο πριν από κάθε υπηρεσιακή ενέργεια.</p></div>
+</div>
+<script>
+(() => {
+  if (!window.fetch || !window.TextDecoder || !window.ReadableStream) return;
+  const form = document.getElementById('chat-form'), input = document.getElementById('q');
+  const feed = document.getElementById('chat-feed'), button = form.querySelector('button');
+  const bottom = document.getElementById('feed-bottom');
+  let busy = false, follow = true;
+  function scroll() { if (follow) feed.scrollTop = feed.scrollHeight; }
+  feed.addEventListener('scroll', () => { follow = feed.scrollHeight-feed.scrollTop-feed.clientHeight < 100; bottom.hidden=follow; });
+  bottom.addEventListener('click', () => { follow=true; scroll(); bottom.hidden=true; });
+  function resizeInput() { input.style.height='auto'; const cap=Math.min(160,window.innerHeight*.22); input.style.height=Math.min(input.scrollHeight,cap)+'px'; input.style.overflowY=input.scrollHeight>cap?'auto':'hidden'; }
+  input.addEventListener('input',resizeInput);
+  window.addEventListener('resize',resizeInput);
+  resizeInput();
+  input.addEventListener('keydown', e => { if(e.key==='Enter' && !e.shiftKey && !e.isComposing){e.preventDefault(); if(!busy) form.requestSubmit();} });
+  function node(tag, cls, text) { const el=document.createElement(tag); if(cls) el.className=cls; if(text!==undefined) el.textContent=text; return el; }
+  form.addEventListener('submit', async e => {
+    e.preventDefault(); if(busy || !input.value.trim()) return;
+    const question=input.value.trim(), data=new FormData(); data.set('question',question);
+    busy=true; button.disabled=true; document.getElementById('welcome')?.remove();
+    input.value=''; resizeInput();
+    const turn=node('article','turn'), user=node('div','user-message',question);
+    const label=node('div','assistant-label','✦  Πυρσός');
+    const status=node('div','turn-status busy','Αναζήτηση πηγών…'); status.setAttribute('role','status'); status.setAttribute('aria-live','polite');
+    const answer=node('div','answer-body'), heading=node('div','sources-heading',''), cards=node('div','source-cards');
+    turn.append(user,label,status,answer,heading,cards); feed.append(turn); turn.setAttribute('aria-busy','true'); follow=true; scroll();
+    let reader, completed=false;
+    function showSources(sources) {
+      heading.textContent=sources.length ? `Βρέθηκαν ${sources.length} πηγές` : 'Δεν βρέθηκαν πηγές';
+      sources.forEach((source,i) => {
+        const card=node('details','source-card'); card.style.animationDelay=`${i*70}ms`;
+        const summary=node('summary'), title=node('strong','',`[ΠΗΓΗ ${i+1}] ${source.doc_key}`);
+        summary.append(title,document.createTextNode(` · σελ. ${source.page}–${source.page_end}`));
+        const content=node('div','source-content'), crumb=node('small','',source.breadcrumb), text=node('p','text',source.text);
+        const link=node('a','pdf-link','Άνοιγμα πρωτοτύπου ↗');
+        link.href=`/files/${encodeURIComponent(source.document_id)}#page=${Number(source.page)}`; link.target='_blank'; link.rel='noopener';
+        content.append(crumb,text,link);card.append(summary,content);cards.append(card);
+      }); scroll();
+    }
+    function consume(line) {
+      if(!line.trim())return; const event=JSON.parse(line);
+      if(event.type==='status')status.textContent=event.message;
+      else if(event.type==='sources')showSources(event.sources);
+      else if(event.type==='token'){answer.classList.add('generating');answer.append(document.createTextNode(event.text));scroll();}
+      else if(event.type==='error')throw new Error(event.message);
+      else if(event.type==='done'){completed=true;status.textContent=event.output_limit_reached ? 'Η απάντηση έφτασε το όριο και ενδέχεται να είναι ημιτελής.' : 'Η απάντηση ολοκληρώθηκε';}
+    }
+    try {
+      const response=await fetch('/ask/stream',{method:'POST',body:data});
+      if(!response.ok || !response.body)throw new Error('Αποτυχία σύνδεσης. Δοκιμάστε ξανά.');
+      reader=response.body.getReader(); const decoder=new TextDecoder('utf-8');let buffer='';
+      while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value,{stream:!done});const lines=buffer.split('\n');buffer=lines.pop();lines.forEach(consume);if(done){consume(buffer);break;}}
+      if(!completed)throw new Error('Η σύνδεση διακόπηκε. Η απάντηση είναι ημιτελής.');
+    } catch(error){status.textContent=error.message || 'Η απάντηση δεν ολοκληρώθηκε.';if(reader)await reader.cancel().catch(()=>{});}
+    finally{if(reader)reader.releaseLock();answer.classList.remove('generating');status.classList.remove('busy');turn.setAttribute('aria-busy','false');busy=false;button.disabled=false;scroll();input.focus({preventScroll:true});}
+  });
+})();
+</script>
 {% endblock %}
