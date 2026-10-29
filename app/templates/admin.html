@@ -11,6 +11,6 @@
 <td><span class="{{ d.status }}">{{ d.status }}</span><br><small>{{ d.progress_done }} / {{ d.progress_total }} passages</small></td><td>{% if d.is_active %}<span class="active">✅ Ενεργός</span>{% else %}<span class="muted">Ανενεργός</span>{% endif %}</td>
 <td>{% if d.status=='ready' and not d.is_active %}<form class="inline" action="/admin/document/{{ d.id }}/activate" method="post"><button type="submit">Ενεργοποίηση</button></form>{% endif %}
 {% if d.is_active %}<form class="inline" action="/admin/document/{{ d.id }}/deactivate" method="post"><button class="warn" type="submit">Απενεργοποίηση</button></form>{% endif %}
-{% if d.status=='failed' %}<form class="inline" action="/admin/document/{{ d.id }}/retry" method="post"><button class="subtle">Επανάληψη</button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="5">Δεν υπάρχουν κανονισμοί. Ξεκίνα από το upload.</td></tr>{% endfor %}
+{% if d.status=='failed' %}<form class="inline" action="/admin/document/{{ d.id }}/retry" method="post"><button class="subtle">Επανάληψη</button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="5">Δεν υπάρχουν κανονισμοί. Ξεκινήστε με την ανάρτηση ενός PDF.</td></tr>{% endfor %}
 </tbody></table></div>
 {% endblock %}

@@ -9,11 +9,11 @@ body:has(.chat-shell){height:100dvh;display:flex;flex-direction:column;overflow:
 {% if answer is not none %}
 <article class="turn"><div class="user-message">{{ question }}</div><div class="assistant-label"><span class="spark">✦</span> Πυρσός</div><div class="answer-body">{{ answer }}</div><div class="sources-heading">Πηγές</div><div class="source-cards">{% for s in sources %}<details class="source-card"><summary><strong>[ΠΗΓΗ {{ loop.index }}] {{ s.doc_key }}</strong> · σελ. {{ s.page }}–{{ s.page_end }}</summary><div class="source-content"><small>{{ s.breadcrumb }}</small><p class="text">{{ s.text }}</p><a class="pdf-link" href="/files/{{ s.document_id }}#page={{ s.page }}" target="_blank" rel="noopener">Άνοιγμα πρωτοτύπου ↗</a></div></details>{% endfor %}</div></article>
 {% else %}
-<div id="welcome" class="welcome"><div class="welcome-icon">✦</div><h2>Τι θέλεις να βρούμε;</h2><p class="muted">Ρώτησε για τους κανονισμούς σου.<br>Διάβασε την απάντηση και άνοιξε τις πηγές για επιβεβαίωση.</p></div>
+<div id="welcome" class="welcome"><div class="welcome-icon">✦</div><h2>Τι θέλετε να βρούμε;</h2><p class="muted">Ρωτήστε για τους κανονισμούς σας.<br>Διαβάστε την απάντηση και ανοίξτε τις πηγές για επιβεβαίωση.</p></div>
 {% endif %}
 </div>
 <button id="feed-bottom" class="feed-bottom" type="button" hidden>Στο τελευταίο μήνυμα ↓</button>
-<div class="composer-area"><form id="chat-form" class="composer" action="/ask" method="post"><label class="sr-only" for="q">Η ερώτησή σου</label><textarea id="q" name="question" maxlength="1500" rows="1" required placeholder="Γράψε την ερώτησή σου…"></textarea><div class="composer-bottom"><span class="composer-hint">Enter για αποστολή · Shift+Enter για νέα γραμμή</span><button class="send-button" type="submit" aria-label="Αποστολή ερώτησης"><span>Αποστολή</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></form><p class="composer-note">Πιλοτικό σύστημα · Έλεγχε το πρωτότυπο πριν από κάθε υπηρεσιακή ενέργεια.</p></div>
+<div class="composer-area"><form id="chat-form" class="composer" action="/ask" method="post"><label class="sr-only" for="q">Η ερώτησή σας</label><textarea id="q" name="question" maxlength="1500" rows="1" required placeholder="Γράψτε την ερώτησή σας…"></textarea><div class="composer-bottom"><span class="composer-hint">Enter για αποστολή · Shift+Enter για νέα γραμμή</span><button class="send-button" type="submit" aria-label="Αποστολή ερώτησης"><span>Αποστολή</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></form><p class="composer-note">Πιλοτικό σύστημα · Ελέγχετε το πρωτότυπο πριν από κάθε υπηρεσιακή ενέργεια.</p></div>
 </div>
 <script>
 (() => {
@@ -64,7 +64,7 @@ body:has(.chat-shell){height:100dvh;display:flex;flex-direction:column;overflow:
     }
     try {
       const response=await fetch('/ask/stream',{method:'POST',body:data});
-      if(!response.ok || !response.body)throw new Error('Αποτυχία σύνδεσης. Δοκίμασε ξανά.');
+      if(!response.ok || !response.body)throw new Error('Αποτυχία σύνδεσης. Δοκιμάστε ξανά.');
       reader=response.body.getReader(); const decoder=new TextDecoder('utf-8');let buffer='';
       while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value,{stream:!done});const lines=buffer.split('\n');buffer=lines.pop();lines.forEach(consume);if(done){consume(buffer);break;}}
       if(!completed)throw new Error('Η σύνδεση διακόπηκε. Η απάντηση είναι ημιτελής.');
