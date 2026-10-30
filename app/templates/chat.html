@@ -56,7 +56,8 @@ body:has(.chat-shell){height:100dvh;display:flex;flex-direction:column;overflow:
     }
     function consume(line) {
       if(!line.trim())return; const event=JSON.parse(line);
-      if(event.type==='status')status.textContent=event.message;
+      if(event.type==='queue')status.textContent=`Είστε στη θέση ${event.position} στην ουρά · Εξυπηρετούνται ${event.active} από 2 αιτήματα. Η απάντησή σας θα ξεκινήσει αυτόματα.`;
+      else if(event.type==='status')status.textContent=event.message;
       else if(event.type==='sources')showSources(event.sources);
       else if(event.type==='token'){answer.classList.add('generating');answer.append(document.createTextNode(event.text));scroll();}
       else if(event.type==='error')throw new Error(event.message);

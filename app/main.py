@@ -1,5 +1,7 @@
 """Military RAG v0.5 portable Docker pilot. NOT APPROVED for protected/classified networks."""
 from __future__ import annotations
+import asyncio
+import anyio
 import json
 import logging
 import hashlib
@@ -19,6 +21,8 @@ from db import connect, audit
 from retrieval import run_rag, retrieve
 from prompt_context import pack_sources
 from inference import EMBED_MODEL, stream_answer
+from chat_queue import chat_queue
+from starlette.concurrency import run_in_threadpool
 
 STORAGE=Path('/storage/documents')
 STORAGE.mkdir(parents=True,exist_ok=True)
@@ -27,8 +31,8 @@ ADMIN_USER=os.environ.get('ADMIN_USER','')
 ADMIN_PASSWORD=os.environ.get('ADMIN_PASSWORD','')
 VIEWER_USER=os.environ.get('VIEWER_USER','')
 VIEWER_PASSWORD=os.environ.get('VIEWER_PASSWORD','')
-if not all((ADMIN_USER,ADMIN_PASSWORD,VIEWER_USER,VIEWER_PASSWORD)) or any('CHANGE_ME' in v for v in (ADMIN_PASSWORD,VIEWER_PASSWORD)):
-    raise RuntimeError('Configure strong ADMIN_PASSWORD and VIEWER_PASSWORD in .env')
+if not all((ADMIN_USER,ADMIN_PASSWORD)) or 'CHANGE_ME' in ADMIN_PASSWORD:
+    raise RuntimeError('Configure ADMIN_USER and ADMIN_PASSWORD in .env')
 
 security=HTTPBasic()
 app=FastAPI(title='Military RAG v0.5',docs_url=None,redoc_url=None,openapi_url=None)
@@ -43,11 +47,6 @@ def require_admin(c: HTTPBasicCredentials=Depends(security)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,headers={'WWW-Authenticate':'Basic realm="RAG Administration"'})
     return c.username
 
-def require_viewer(c: HTTPBasicCredentials=Depends(security)):
-    if matches(c,ADMIN_USER,ADMIN_PASSWORD) or matches(c,VIEWER_USER,VIEWER_PASSWORD):
-        return c.username
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,headers={'WWW-Authenticate':'Basic realm="RAG Pilot"'})
-
 def render(request,name,**data):
     return templates.TemplateResponse(request,name,{'org':os.environ.get('ORG_LABEL','RAG Pilot'),**data})
 
@@ -56,19 +55,30 @@ def health():
     return {'status':'ok'}
 
 @app.get('/',response_class=HTMLResponse)
-def chat_home(request:Request,username=Depends(require_viewer)):
-    return render(request,'chat.html',answer=None,sources=None,question='',username=username)
+def chat_home(request:Request):
+    return render(request,'chat.html',answer=None,sources=None,question='',username='')
 
 @app.post('/ask',response_class=HTMLResponse)
-def ask(request:Request,question:str=Form(...),username=Depends(require_viewer)):
+async def ask(request:Request,question:str=Form(...)):
     question=question.strip()
-    if not question or len(question)>1500: raise HTTPException(400,'Question length must be 1-1500 characters')
-    try: result,sources=run_rag(question)
-    except Exception as exc: result,sources='Σφάλμα επικοινωνίας με την υπηρεσία AI ή τη βάση. Ελέγξτε Ollama και τα logs.',[]
-    return render(request,'chat.html',answer=result,sources=sources,question=question,username=username)
+    if not question or len(question)>1500:
+        raise HTTPException(400,'Question length must be 1-1500 characters')
+    ticket=chat_queue.join()
+    try:
+        while not chat_queue.claim(ticket):
+            if await request.is_disconnected():
+                return HTMLResponse('',status_code=499)
+            await asyncio.sleep(1)
+        try:
+            result,sources=await run_in_threadpool(run_rag,question)
+        except Exception:
+            result,sources='Η απάντηση δεν ολοκληρώθηκε. Δοκιμάστε ξανά.',[]
+        return render(request,'chat.html',answer=result,sources=sources,question=question,username='')
+    finally:
+        chat_queue.release(ticket)
 
 @app.post('/ask/stream')
-def ask_stream(question: str = Form(...), username=Depends(require_viewer)):
+async def ask_stream(request: Request, question: str = Form(...)):
     question = question.strip()
     if not question or len(question) > 1500:
         raise HTTPException(400, 'Question length must be 1-1500 characters')
@@ -86,8 +96,10 @@ def ask_stream(question: str = Form(...), username=Depends(require_viewer)):
             else:
                 yield event('status', message='Σύνταξη απάντησης…')
                 diagnostics = {}
-                for token in stream_answer(question, context, on_complete=diagnostics.update):
-                    yield event('token', text=token)
+                from contextlib import closing
+                with closing(stream_answer(question, context, on_complete=diagnostics.update)) as tokens:
+                    for token in tokens:
+                        yield event('token', text=token)
                 yield event('done', output_limit_reached=diagnostics.get('output_limit_reached', False))
                 return
             yield event('done', output_limit_reached=False)
@@ -95,7 +107,38 @@ def ask_stream(question: str = Form(...), username=Depends(require_viewer)):
             logging.getLogger(__name__).exception('Streaming RAG failed')
             yield event('error', message='Η απάντηση δεν ολοκληρώθηκε. Ελέγξτε Ollama και τα logs και δοκιμάστε ξανά.')
 
-    return StreamingResponse(generate(), media_type='application/x-ndjson',
+    async def queued_generate():
+        ticket=chat_queue.join()
+        iterator=None
+        sentinel=object()
+        try:
+            while not chat_queue.claim(ticket):
+                if await request.is_disconnected():
+                    return
+                yield event('queue', position=chat_queue.position(ticket), active=len(chat_queue.active))
+                await asyncio.sleep(1)
+            if await request.is_disconnected():
+                return
+            iterator=generate()
+            while True:
+                # Keep blocking DB/Ollama work off the event loop so queued clients
+                # continue receiving position updates while two requests run.
+                item=await run_in_threadpool(next,iterator,sentinel)
+                if item is sentinel:
+                    break
+                if await request.is_disconnected():
+                    return
+                yield item
+        finally:
+            # Close the Ollama stream before releasing its slot, including cancellation.
+            with anyio.CancelScope(shield=True):
+                try:
+                    if iterator is not None:
+                        await run_in_threadpool(iterator.close)
+                finally:
+                    chat_queue.release(ticket)
+
+    return StreamingResponse(queued_generate(), media_type='application/x-ndjson',
                              headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 
@@ -196,10 +239,11 @@ def retry(doc_id:uuid.UUID,username=Depends(require_admin)):
     return RedirectResponse('/admin',status_code=303)
 
 @app.get('/files/{doc_id}')
-def pdf_file(doc_id:uuid.UUID,username=Depends(require_viewer)):
+def pdf_file(doc_id:uuid.UUID,c: HTTPBasicCredentials=Depends(HTTPBasic(auto_error=False))):
     with connect() as conn:
         doc=conn.execute('SELECT stored_path,filename,is_active FROM documents WHERE id=%s',(doc_id,)).fetchone()
     if not doc: raise HTTPException(404,'Document not found')
-    if not doc['is_active'] and username!=ADMIN_USER: raise HTTPException(403,'Not published')
+    if not doc['is_active'] and not (c and matches(c,ADMIN_USER,ADMIN_PASSWORD)):
+        raise HTTPException(403,'Not published')
     # The UUID-backed storage path is from our own DB, not a client-supplied path.
     return FileResponse(doc['stored_path'],media_type='application/pdf',filename=doc['filename'],content_disposition_type='inline')
